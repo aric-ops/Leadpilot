@@ -22,8 +22,20 @@ import time
 from collections import Counter
 from pathlib import Path
 
-LOG_PATH = Path("logs/runs.jsonl")
-STATE_PATH = Path("logs/.run_state.json")  # tracks current job between --start and --finalize
+from dotenv import find_dotenv, load_dotenv
+
+_DOTENV_PATH = find_dotenv(usecwd=True)
+load_dotenv(_DOTENV_PATH)
+REPO_ROOT = Path(_DOTENV_PATH).parent if _DOTENV_PATH else Path.cwd()
+
+
+def _resolve(p: str) -> Path:
+    path = Path(p)
+    return path if path.is_absolute() else REPO_ROOT / path
+
+
+LOG_PATH = REPO_ROOT / "logs" / "runs.jsonl"
+STATE_PATH = REPO_ROOT / "logs" / ".run_state.json"  # tracks current job
 
 
 def _save_state(state: dict) -> None:
@@ -41,7 +53,7 @@ def start_run(client: str, filter_path: str | None) -> None:
     state = {
         "client": client,
         "started_at": int(time.time()),
-        "filter": json.loads(Path(filter_path).read_text()) if filter_path else None,
+        "filter": json.loads(_resolve(filter_path).read_text()) if filter_path else None,
     }
     _save_state(state)
     print(f"Run started: {client} @ {state['started_at']}")
@@ -50,7 +62,7 @@ def start_run(client: str, filter_path: str | None) -> None:
 def finalize_run(client: str, scored_path: str, credits_used: int,
                  filter_path: str | None = None) -> None:
     state = _load_state()
-    contacts = json.loads(Path(scored_path).read_text())
+    contacts = json.loads(_resolve(scored_path).read_text())
 
     tiers = Counter(c["_score"]["tier"] for c in contacts if "_score" in c)
     total = len(contacts)
@@ -67,7 +79,7 @@ def finalize_run(client: str, scored_path: str, credits_used: int,
         "client": client,
         "started_at": state.get("started_at"),
         "finished_at": int(time.time()),
-        "filter": state.get("filter") or (json.loads(Path(filter_path).read_text()) if filter_path else None),
+        "filter": state.get("filter") or (json.loads(_resolve(filter_path).read_text()) if filter_path else None),
         "delivered": total,
         "tiers": dict(tiers),
         "avg_confidence": round(avg_score, 1),

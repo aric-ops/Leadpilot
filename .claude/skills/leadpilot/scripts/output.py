@@ -25,7 +25,18 @@ import sys
 from datetime import date
 from pathlib import Path
 
-TEMPLATE_PATH = Path(".claude/skills/leadpilot/references/output_template.json")
+from dotenv import find_dotenv, load_dotenv
+
+_DOTENV_PATH = find_dotenv(usecwd=True)
+load_dotenv(_DOTENV_PATH)
+REPO_ROOT = Path(_DOTENV_PATH).parent if _DOTENV_PATH else Path.cwd()
+
+TEMPLATE_PATH = REPO_ROOT / ".claude" / "skills" / "leadpilot" / "references" / "output_template.json"
+
+
+def _resolve(p: str) -> Path:
+    path = Path(p)
+    return path if path.is_absolute() else REPO_ROOT / path
 
 
 def load_columns() -> list[str]:
@@ -48,38 +59,49 @@ def build_notes(contact: dict) -> str:
     return " | ".join(parts)
 
 
+def _flat(v) -> str:
+    """Coerce ZoomInfo's occasional list values (e.g. industry) to a string for
+    the spreadsheet cell. Lists -> first element. None -> empty string."""
+    if isinstance(v, list):
+        return str(v[0]) if v else ""
+    if v is None:
+        return ""
+    return str(v)
+
+
 def row_for_contact(contact: dict, client: str, columns: list[str]) -> dict:
-    """Map a scored contact dict to the 25-column row."""
+    """Map a scored, normalized contact dict to the 25-column row."""
     score = contact.get("_score", {})
-    addr = contact.get("address", {})
     company = contact.get("company", {})
 
-    full_addr_parts = [addr.get("street"), addr.get("city"), addr.get("state"),
-                       addr.get("zip"), addr.get("country")]
-    full_address = ", ".join([p for p in full_addr_parts if p])
-    local_address = ", ".join([p for p in full_addr_parts[:-1] if p])  # without country
+    # In our normalized schema, the contact's mailing address is the company
+    # address (we don't track home addresses separately).
+    parts = [company.get("street"), company.get("city"), company.get("state"),
+             company.get("zipCode"), company.get("country")]
+    full_address  = ", ".join([p for p in parts if p])
+    local_address = ", ".join([p for p in parts[:-1] if p])  # without country
 
     return {
-        "Organization": company.get("name", ""),
-        "Deal Title": f"{client} - {company.get('name', '')}",
-        "Industry": company.get("industry", ""),
-        "Contact Name": contact.get("fullName", ""),
-        "Job Title": contact.get("jobTitle", ""),
-        "Email Address": contact.get("email", ""),
-        "Direct Phone Number": contact.get("directPhone", ""),
-        "Mobile phone": contact.get("mobilePhone", ""),
+        "Organization": _flat(company.get("name")),
+        "Deal Title": f"{client} - {_flat(company.get('name'))}",
+        "Industry": _flat(company.get("industry")),
+        "Contact Name": _flat(contact.get("fullName")),
+        "Job Title": _flat(contact.get("jobTitle")),
+        "Email Address": _flat(contact.get("email")),
+        "Direct Phone Number": _flat(contact.get("directPhone")),
+        "Mobile phone": _flat(contact.get("mobilePhone")),
         "Contact Name (2nd)": "",
         "Job Title (2nd)": "",
         "Email Address (2nd)": "",
         "Direct Phone Number (2nd)": "",
         "Mobile phone (2nd)": "",
-        "Website": company.get("website", ""),
-        "Company HQ Phone": company.get("hqPhone", ""),
-        "Street Address": addr.get("street", ""),
-        "City": addr.get("city", ""),
-        "State": addr.get("state", ""),
-        "Zipcode": addr.get("zip", ""),
-        "Country": addr.get("country", ""),
+        "Website": _flat(company.get("website")),
+        "Company HQ Phone": _flat(company.get("phone")),
+        "Street Address": _flat(company.get("street")),
+        "City": _flat(company.get("city")),
+        "State": _flat(company.get("state")),
+        "Zipcode": _flat(company.get("zipCode")),
+        "Country": _flat(company.get("country")),
         "Full Address": full_address,
         "Local address": local_address,
         "Confidence Score": score.get("total", 0),
@@ -125,7 +147,7 @@ def main() -> int:
     args = p.parse_args()
 
     columns = load_columns()
-    contacts = json.loads(Path(args.input).read_text())
+    contacts = json.loads(_resolve(args.input).read_text())
 
     # Sort high-to-low by score
     contacts.sort(key=lambda c: c.get("_score", {}).get("total", 0), reverse=True)
@@ -136,7 +158,7 @@ def main() -> int:
         fname = f"{slugify(args.client)}_{date.today().isoformat()}{suffix}.{args.format}"
         args.out = f"output/{fname}"
 
-    out_path = Path(args.out)
+    out_path = _resolve(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     if args.format == "csv":

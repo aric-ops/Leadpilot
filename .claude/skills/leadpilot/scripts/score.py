@@ -30,6 +30,17 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dotenv import find_dotenv, load_dotenv
+
+_DOTENV_PATH = find_dotenv(usecwd=True)
+load_dotenv(_DOTENV_PATH)
+REPO_ROOT = Path(_DOTENV_PATH).parent if _DOTENV_PATH else Path.cwd()
+
+
+def _resolve(p: str) -> Path:
+    path = Path(p)
+    return path if path.is_absolute() else REPO_ROOT / path
+
 
 def score_linkedin(v: dict) -> tuple[int, str]:
     if not v:
@@ -55,13 +66,26 @@ def score_website(v: dict) -> tuple[int, str]:
     return 0, "ambiguous"
 
 
-def score_freshness(last_updated_iso: str | None) -> tuple[int, str]:
-    if not last_updated_iso:
+def score_freshness(last_updated: str | None) -> tuple[int, str]:
+    """ZoomInfo returns dates as US-format strings like '04/06/2026 09:26 AM'.
+    We also tolerate ISO 8601 in case the schema changes."""
+    if not last_updated:
         return 0, "unknown"
-    try:
-        dt = datetime.fromisoformat(last_updated_iso.replace("Z", "+00:00"))
-    except ValueError:
-        return 0, "unparseable"
+    dt = None
+    for fmt in ("%m/%d/%Y %I:%M %p", "%m/%d/%Y %H:%M",
+                "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            dt = datetime.strptime(last_updated.strip().rstrip("Z"), fmt)
+            break
+        except ValueError:
+            continue
+    if not dt:
+        try:
+            dt = datetime.fromisoformat(last_updated.replace("Z", "+00:00"))
+        except ValueError:
+            return 0, "unparseable"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
     days = (datetime.now(timezone.utc) - dt).days
     if days <= 90:
         return 20, "<=90d"
@@ -81,7 +105,12 @@ def score_completeness(contact: dict) -> tuple[int, str]:
     if contact.get("directPhone") or contact.get("mobilePhone"):
         pts += 5
         parts.append("phone")
-    if any("linkedin.com" in (u or "").lower() for u in (contact.get("externalUrls") or [])):
+    # externalUrls items are {"type": "linkedin.com", "url": "..."} dicts
+    if any(
+        "linkedin.com" in (u.get("type") or u.get("url") or "").lower() if isinstance(u, dict)
+        else "linkedin.com" in (u or "").lower()
+        for u in (contact.get("externalUrls") or [])
+    ):
         pts += 5
         parts.append("linkedin_url")
     return pts, "+".join(parts) if parts else "none"
@@ -136,16 +165,18 @@ def main() -> int:
                    help="include DISCARD-tier rows in output (default: drop)")
     args = p.parse_args()
 
-    contacts = json.loads(Path(args.input).read_text())
+    contacts = json.loads(_resolve(args.input).read_text())
     scored = [score_contact(c) for c in contacts]
     if not args.keep_discard:
         scored = [c for c in scored if c["_score"]["tier"] != "DISCARD"]
 
-    Path(args.out).write_text(json.dumps(scored, indent=2))
+    out = _resolve(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(scored, indent=2))
     by_tier = {}
     for c in scored:
         by_tier[c["_score"]["tier"]] = by_tier.get(c["_score"]["tier"], 0) + 1
-    print(f"Scored {len(scored)} contacts -> {args.out}")
+    print(f"Scored {len(scored)} contacts -> {out}")
     print(f"  Tier distribution: {by_tier}")
     return 0
 
