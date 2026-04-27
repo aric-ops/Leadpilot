@@ -1,6 +1,7 @@
 # Secrets — NEVER commit
 .env
-.env.local
+.env.*
+!.env.example
 *.pem
 *.key
 zoominfo_private_key*
