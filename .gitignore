@@ -1,0 +1,29 @@
+# Secrets — NEVER commit
+.env
+.env.local
+*.pem
+*.key
+zoominfo_private_key*
+
+# Token + state caches
+.token_cache.json
+logs/.run_state.json
+
+# Run output (lead lists are confidential per-client)
+output/
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.python-version
+*.egg-info/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

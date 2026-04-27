@@ -1,0 +1,8 @@
+{
+  "_comment": "Cache of ZoomInfo Lookup Data results so we don't re-query on every run. Populated by scripts/icp_parser.py. Manually curated entries are also fine.",
+  "industry": {},
+  "employees": {},
+  "revenue": {},
+  "location": {},
+  "managementLevel": {}
+}

@@ -1,0 +1,23 @@
+{
+  "_comment": "Per-client filter templates and confidence thresholds. Filled in as clients are onboarded. Each profile can override default tier thresholds and store reusable filter sets.",
+  "_schema_example": {
+    "client_name": {
+      "default_filter": {
+        "industry": "...",
+        "employees": "...",
+        "revenue": "...",
+        "location": "...",
+        "titles": ["..."]
+      },
+      "fallback_titles": ["..."],
+      "tier_thresholds": {
+        "HIGH": 80,
+        "MEDIUM": 60,
+        "LOW": 40
+      },
+      "monthly_target": 25,
+      "notes": "..."
+    }
+  },
+  "profiles": {}
+}

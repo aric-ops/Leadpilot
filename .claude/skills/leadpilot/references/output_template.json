@@ -1,0 +1,31 @@
+{
+  "version": "v2-25col",
+  "description": "Locked column order for LeadPilot output. 23 base columns from the historical Harbinger template + Confidence Score + Confidence Tier. NOTES carries verification flags and per-source score breakdown.",
+  "columns": [
+    "Organization",
+    "Deal Title",
+    "Industry",
+    "Contact Name",
+    "Job Title",
+    "Email Address",
+    "Direct Phone Number",
+    "Mobile phone",
+    "Contact Name (2nd)",
+    "Job Title (2nd)",
+    "Email Address (2nd)",
+    "Direct Phone Number (2nd)",
+    "Mobile phone (2nd)",
+    "Website",
+    "Company HQ Phone",
+    "Street Address",
+    "City",
+    "State",
+    "Zipcode",
+    "Country",
+    "Full Address",
+    "Local address",
+    "Confidence Score",
+    "Confidence Tier",
+    "NOTES"
+  ]
+}
