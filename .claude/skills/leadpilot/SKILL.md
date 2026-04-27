@@ -38,10 +38,11 @@ If any of these are missing, ASK USER before proceeding.
 
 Wait for the user's reply before continuing.
 
-### 3. Auth + credit check
+### 3. Auth + credit check + start log
 
-Run `python -m scripts.auth --check` — this confirms ZoomInfo OAuth works and caches a token.
-Run `python -m scripts.credit_monitor --check` — this calls `/usage` and reports balance. If under 10% of annual pool remains, halt and warn the user.
+Run `python -m scripts.auth --check` — confirms ZoomInfo PKI auth works and caches a token.
+Run `python -m scripts.credit_monitor --start "<client>"` — calls `GET /lookup/usage`, logs starting balance to `logs/credit_tally.jsonl`, and **halts the run if the credit pool (uniqueIdLimit) is over 90% used** (warn at 75%).
+Run `python -m scripts.run_logger --start --client "<client>"` — records run start time so the final summary has duration data.
 
 ### 4. Lookup Data → ICP filter object
 
@@ -83,8 +84,9 @@ Writes 25-column file sorted by confidence DESC to `output/<client>_<YYYY-MM-DD>
 
 ### 11. Run log
 
-Run `python -m scripts.run_logger --finalize --client "<client>" --scored output/.tmp/scored.json --credits-used <N>`.
-Writes summary to `logs/runs.jsonl`. Then delete `output/.tmp/` to clean up intermediate files.
+Run `python -m scripts.credit_monitor --finalize "<client>" --used <N>` to log final balance.
+Run `python -m scripts.run_logger --finalize --client "<client>" --scored output/.tmp/scored.json --filter output/.tmp/filter.json --credits-used <N>` to write the run summary to `logs/runs.jsonl`.
+Then delete `output/.tmp/` to clean up intermediate files.
 
 ### 12. Report to user
 
