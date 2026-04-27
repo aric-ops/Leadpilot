@@ -13,7 +13,7 @@ Autonomous lead discovery skill. The flow is: discover real local companies via 
 
 ## Run flow
 
-When the user asks to run a job, follow these steps in order. Stop and prompt the user wherever the flow says "ASK USER".
+When the user asks to run a job, follow these steps in order. Intermediate JSONs live in `output/.tmp/` — create that directory before step 4. Stop and prompt the user wherever the flow says "ASK USER".
 
 ### 1. Parse the request
 
@@ -45,46 +45,46 @@ Run `python -m scripts.credit_monitor --check` — this calls `/usage` and repor
 
 ### 4. Lookup Data → ICP filter object
 
-Run `python -m scripts.icp_parser --industry "<industry>" --employees "<band>" --revenue "<band>" --location "<geo>" --titles "<title list>"`.
+Run `python -m scripts.icp_parser --industry "<industry>" --employees "<band>" --revenue "<band>" --location "<geo>" --titles "<title list>" --out output/.tmp/filter.json`.
 This calls ZoomInfo Lookup Data, builds the filter JSON, and prints it back. **Show the parsed filter to the user and ask them to confirm before searching.**
 
 ### 5. Stage A — Firecrawl local company discovery
 
-Run `python -m scripts.search_loop --stage A --filter <filter.json> --target <N>`.
+Run `python -m scripts.search_loop --stage A --filter output/.tmp/filter.json --target <N> --out output/.tmp/stageA.json`.
 Discovers real companies in the target geography from Firecrawl. Outputs a deduplicated list of `{name, address, website}`.
 
 ### 6. Stage B — ZoomInfo match + enrich
 
-Run `python -m scripts.search_loop --stage B --companies <stageA.json>`.
+Run `python -m scripts.search_loop --stage B --companies output/.tmp/stageA.json --filter output/.tmp/filter.json --out output/.tmp/enriched.json`.
 - Calls Search Companies for each local company (free)
 - Calls Search Contacts with the title filter at each matched company (free, iterates aggressively)
 - Calls Enrich Contact in batches of 25 only on verified matches (credits spent here)
 
 ### 7. Stage C — broaden if short
 
-If contact count is below `target`, run `python -m scripts.search_loop --stage C --tried <tried.json> --target <N>`.
+If contact count is below `target`, run `python -m scripts.search_loop --stage C --tried output/.tmp/tried.json --target <N> --fallback-titles "<comma list>" --stop-condition <broaden_until_hit|deliver_partial|stop_and_ask> --out output/.tmp/enriched.json`.
 Broadens by: title fallbacks → geography expansion (county → adjacent counties → state region) → HQ contacts as last resort (flagged for manual review).
 **Respects the stop-condition the user set in step 2.**
 
 ### 8. Verify
 
-Run `python -m scripts.verify --input <enriched.json>`.
+Run `python -m scripts.verify --input output/.tmp/enriched.json --out output/.tmp/verified.json`.
 Per contact: Bright Data LinkedIn (Tier A if `externalUrls` has LinkedIn URL, else Tier B name-based), Firecrawl website team-page scrape, SEC EDGAR (public companies only).
 
 ### 9. Score
 
-Run `python -m scripts.score --input <verified.json>`.
+Run `python -m scripts.score --input output/.tmp/verified.json --out output/.tmp/scored.json`.
 Composite 0–100 confidence score. Tags HIGH (80+) / MEDIUM (60–79) / LOW (40–59) / DISCARD (<40). DISCARD rows are dropped.
 
 ### 10. Output
 
-Run `python -m scripts.output --input <scored.json> --client "<client>" --format xlsx`.
+Run `python -m scripts.output --input output/.tmp/scored.json --client "<client>" --format xlsx`.
 Writes 25-column file sorted by confidence DESC to `output/<client>_<YYYY-MM-DD>.xlsx`.
 
 ### 11. Run log
 
-Run `python -m scripts.run_logger --finalize`.
-Writes summary to `logs/runs.jsonl`.
+Run `python -m scripts.run_logger --finalize --client "<client>" --scored output/.tmp/scored.json --credits-used <N>`.
+Writes summary to `logs/runs.jsonl`. Then delete `output/.tmp/` to clean up intermediate files.
 
 ### 12. Report to user
 
@@ -111,13 +111,4 @@ Print a summary like:
 
 ## Reference files
 
-- `references/output_template.json` — locked 25-column schema
-- `references/industry_codes_cache.json` — cached Lookup Data results
-- `references/client_profiles.json` — per-client filter templates and confidence thresholds
-
-## Build state
-
-This skill is being built in phases. See `README.md` for current phase status.
-- **Phase 1** — core pipeline (auth, ICP parsing, search loop, verify, output)
-- **Phase 2** — confidence scorer with tiered output
-- **Phase 3** — per-client tuning after 4–6 runs each
+The locked 25-column output schema lives at `references/output_template.json`. Per-client overrides go in `references/client_profiles.json`.
