@@ -72,16 +72,43 @@ def _save_token(token: str, expires_at: int) -> None:
 
 
 def _check_env() -> list[str]:
-    """Return list of missing required env vars."""
-    required = ["ZOOMINFO_USERNAME", "ZOOMINFO_CLIENT_ID", "ZOOMINFO_PRIVATE_KEY_PATH"]
-    return [v for v in required if not os.getenv(v)]
+    """Return list of missing required env vars. Either KEY_PATH or KEY itself
+    must be set (the latter is used in hosted environments like claude.ai/code
+    where there's no .pem file on disk)."""
+    missing = [v for v in ("ZOOMINFO_USERNAME", "ZOOMINFO_CLIENT_ID")
+               if not os.getenv(v)]
+    if not (os.getenv("ZOOMINFO_PRIVATE_KEY") or os.getenv("ZOOMINFO_PRIVATE_KEY_PATH")):
+        missing.append("ZOOMINFO_PRIVATE_KEY (or ZOOMINFO_PRIVATE_KEY_PATH)")
+    return missing
 
 
 def _read_private_key() -> str:
-    """Read the private key .pem file contents as a multi-line string."""
+    """
+    Return the private key as a multi-line PEM string, from one of:
+      1. ZOOMINFO_PRIVATE_KEY    — full PEM contents in the env var (preferred
+                                    for hosted environments like claude.ai/code)
+      2. ZOOMINFO_PRIVATE_KEY_PATH — path to a .pem file (preferred for local)
+    """
+    raw = os.getenv("ZOOMINFO_PRIVATE_KEY", "").strip()
+    if raw:
+        # Some hosted secret managers strip newlines; if the value is a single
+        # long line, restore newlines around BEGIN/END markers and inside the
+        # base64 body so the key parses.
+        if "\n" not in raw and "BEGIN" in raw:
+            raw = raw.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+            raw = raw.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
+            # Insert line breaks every 64 chars in the base64 body
+            head, body, tail = raw.split("\n", 2)
+            body = "\n".join(body[i:i + 64] for i in range(0, len(body), 64))
+            raw = f"{head}\n{body}\n{tail}"
+        return raw
+
     path = os.getenv("ZOOMINFO_PRIVATE_KEY_PATH", "")
     if not path:
-        raise RuntimeError("ZOOMINFO_PRIVATE_KEY_PATH not set in .env")
+        raise RuntimeError(
+            "Neither ZOOMINFO_PRIVATE_KEY nor ZOOMINFO_PRIVATE_KEY_PATH is set. "
+            "Set one in .env (or in claude.ai/code's Secrets panel)."
+        )
     p = Path(path)
     if not p.is_absolute():
         p = REPO_ROOT / p
