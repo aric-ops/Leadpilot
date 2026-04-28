@@ -1,0 +1,11 @@
+# Top-level requirements (used by Railway/Fly/Render deployment).
+# Mirrors .claude/skills/leadpilot/requirements.txt + MCP server deps.
+
+python-dotenv>=1.0.0
+requests>=2.31.0
+openpyxl>=3.1.0
+zi_api_auth_client>=1.0.0
+
+# MCP server
+mcp>=1.0.0
+uvicorn>=0.30.0

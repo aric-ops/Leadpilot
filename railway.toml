@@ -1,0 +1,27 @@
+# Railway deployment config for the LeadPilot MCP server.
+#
+# Setup once:
+#   1. Sign up at railway.app (GitHub login)
+#   2. New Project -> Deploy from GitHub -> aric-ops/Leadpilot
+#   3. Variables tab: paste the same env vars from .env (ZOOMINFO_*,
+#      BRIGHTDATA_*, FIRECRAWL_*, SEC_EDGAR_USER_AGENT). For
+#      ZOOMINFO_PRIVATE_KEY, paste the full PEM contents.
+#   4. Settings -> Networking -> "Generate Domain" to get a public URL.
+#   5. Paste that URL into Cowork as a connector (see README).
+
+[build]
+builder = "NIXPACKS"
+
+# The mcp library requires Python >= 3.10. Pin to 3.11 for stability.
+[build.env]
+NIXPACKS_PYTHON_VERSION = "3.11"
+
+[deploy]
+startCommand = "uvicorn mcp_server:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/sse"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+[deploy.env]
+PYTHONUNBUFFERED = "1"
